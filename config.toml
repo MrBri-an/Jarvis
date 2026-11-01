@@ -1,0 +1,52 @@
+# JARVIS configuration
+# Secrets (API keys) live in .env — see .env.example
+
+[wakeword]
+enabled = true
+name = "hey_jarvis"          # openWakeWord pretrained model
+threshold = 0.3              # measured 0.40 on this user's voice (4-ch downmix)
+refractory_secs = 2.5        # ignore detections for N secs after a hit
+
+[vad]
+start_speech_secs = 0.15     # speech energy needed to start capturing
+end_silence_secs = 0.45      # silence that ends an utterance (endpointing)
+min_utterance_secs = 0.3
+max_utterance_secs = 12.0    # hard cap; noisy rooms otherwise hold the mic open
+barge_in_secs = 0.35         # sustained speech that interrupts playback
+
+[stt]
+# provider: "groq" | "local"
+provider = "groq"
+groq_model = "whisper-large-v3-turbo"
+local_model = "small"        # faster-whisper size: tiny/base/small
+local_compute = "int8"
+
+[llm]
+# provider: "groq" | "openai_compat" (any OpenAI-compatible endpoint)
+provider = "groq"
+model = "openai/gpt-oss-120b"
+vision_model = "qwen/qwen3.8-27b"  # screenshot fallback (best-effort)
+temperature = 0.4
+max_tool_rounds = 5
+history_turns = 12           # conversation turns kept in context
+
+[tts]
+# provider: "piper" | "kokoro" | "sapi" | "groq" ("auto" = best available)
+provider = "auto"
+piper_voice = "en_US-lessac-medium"
+sapi_voice = ""              # empty = Windows default voice
+rate = 175                   # sapi speech rate
+
+[audio]
+sample_rate = 16000
+input_device = "Microphone Array"  # device name match (indices shift when BT devices connect); -1 = default
+output_device = -1                 # -1 = system default speakers
+
+[tools]
+allowed_dirs = ["~"]         # filesystem tools scoped to these roots
+screenshot_dir = "~/Pictures/JARVIS"
+require_confirmation = true  # spoken yes/no before destructive actions
+
+[general]
+name = "JARVIS"
+latency_log = true

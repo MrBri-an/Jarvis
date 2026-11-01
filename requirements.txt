@@ -1,0 +1,34 @@
+# JARVIS voice assistant dependencies (Windows, CPU-only host)
+
+# --- audio pipeline ---
+numpy>=1.26
+sounddevice>=0.4.6          # WASAPI mic capture + playback
+onnxruntime>=1.17           # wake word + VAD inference (CPU)
+openwakeword>=0.6.0         # "hey jarvis" wake word detection
+
+# --- brain (Groq free tier via OpenAI-compatible API) ---
+openai>=1.40                # streaming chat + tool calling
+httpx>=0.27
+
+# --- fallback STT (offline) ---
+faster-whisper>=1.0         # optional; small model runs on CPU
+
+# --- TTS (first that installs wins; see providers/tts.py) ---
+# piper-tts / kokoro-onnx are attempted separately (native wheels, may not exist for 3.13)
+pyttsx3>=2.90               # Windows SAPI5 fallback, always works
+
+# --- system access ---
+psutil>=5.9
+pycaw>=20240210             # volume control
+comtypes>=1.2 ; sys_platform=="win32"
+mss>=9.0                    # screenshots
+winotify>=1.0               # toast notifications
+pillow>=10.0
+requests>=2.31
+
+# --- UI ---
+rich>=13.7                  # console UI
+pystray>=0.19               # system tray (phase 5)
+
+# --- GUI control (phase 4) ---
+pywinauto>=0.6.8

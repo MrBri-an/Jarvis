@@ -1,0 +1,27 @@
+# secrets — NEVER commit
+.env
+
+# downloaded models (~70 MB, re-downloaded on first run)
+models/
+
+# runtime state
+memory.db
+jarvis_tray.log*
+*.log
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# test artifacts
+scripts/_*.wav
+scripts/_*.png
+
+# editor
+.vscode/
+.idea/
