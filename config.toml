@@ -4,7 +4,7 @@
 [wakeword]
 enabled = true
 name = "hey_jarvis"          # openWakeWord pretrained model
-threshold = 0.3              # measured 0.40 on this user's voice (4-ch downmix)
+threshold = 0.2              # measured 0.40 on user's voice; 0.2 = comfortable margin
 refractory_secs = 2.5        # ignore detections for N secs after a hit
 
 [vad]
@@ -50,3 +50,5 @@ require_confirmation = true  # spoken yes/no before destructive actions
 [general]
 name = "JARVIS"
 latency_log = true
+notch = true                 # status pill at the top of the screen
+show_scores = true           # print live wake-word scores while listening

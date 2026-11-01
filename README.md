@@ -29,6 +29,13 @@ python run.py                 # say "Hey Jarvis, what's my battery level?"
 | `python run.py --no-wake` | press Enter, then speak |
 | `python run.py --text` | type instead of talk (test tools without a mic) |
 | `python run.py --text --no-tts` | silent, fastest dev loop |
+| `python run.py --tray` | system tray + notch, no console |
+
+While listening, the console shows live wake-word scores (`hearing… wake score 0.18`)
+so you can see how close you are to triggering. **Pressing Enter also wakes it** —
+the wake word never blocks you. A **status notch** at the top of the screen shows
+idle / listening / thinking / speaking. Interrupt JARVIS by clicking the mouse,
+pressing Esc, or just talking over it.
 
 ## What it can do (24 tools)
 

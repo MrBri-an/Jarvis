@@ -60,24 +60,36 @@ class VoiceIO:
         if config.wakeword.enabled:
             self.wake = WakeWordDetector(config.wakeword.name, config.wakeword.threshold)
         self.paused = False
+        self.phase = "idle"          # idle | awake | listening | thinking (notch)
+        self._manual_trigger = threading.Event()
         self._barge_frames: list[float] = []
         self._barge_active = False
 
     # ---- listening ----
 
     def listen_for_wake(self, timeout: float | None = None) -> bool:
-        """Block until the wake word fires. Returns False on timeout."""
+        """Block until the wake word fires (or Enter is pressed)."""
         refractory_until = 0.0
         deadline = None if timeout is None else time.monotonic() + timeout
+        last_printed = 0.0
+        show_scores = getattr(self.config.general, "show_scores", True)
         while True:
             while self.paused:
                 self.mic.read_frames()  # keep buffer drained while paused
                 time.sleep(0.1)
+            if self._manual_trigger.is_set():
+                self._manual_trigger.clear()
+                return True
             for frame in self.mic.read_frames():
                 now = time.monotonic()
                 if self.wake.feed(frame) and now > refractory_until:
                     refractory_until = now + self.config.wakeword.refractory_secs
                     return True
+                score = self.wake.last_score
+                if show_scores and score > 0.06 and score - last_printed > 0.03:
+                    print(f"  hearing… wake score {score:.2f} "
+                          f"(triggers at {self.config.wakeword.threshold})", end="\r", flush=True)
+                    last_printed = score
             if deadline is not None and time.monotonic() > deadline:
                 return False
             time.sleep(0.01)
@@ -200,6 +212,43 @@ def run_voice(config, no_wake: bool, no_tts: bool) -> None:
     brain = Brain(config, registry, tts, None, memory=mem)
     io = VoiceIO(config, stt, tts)
     _active_voiceio = io
+
+    # status notch (safe to fail)
+    notch = None
+    if getattr(config.general, "notch", True):
+        try:
+            from .notch import NotchBar
+
+            notch = NotchBar()
+            notch.start()
+        except Exception as e:
+            console.print(f"[dim]notch disabled: {e}[/]")
+
+    def _notch_monitor() -> None:
+        last = None
+        while notch is not None and notch.enabled:
+            if io.phase in ("idle", "awake", "listening"):
+                s = io.phase
+            else:  # thinking: flip to speaking while TTS audio is playing
+                s = "speaking" if (io.speaker.busy() and not no_tts) else "thinking"
+            if s != last:
+                notch.set_state(s)
+                last = s
+            time.sleep(0.15)
+
+    threading.Thread(target=_notch_monitor, daemon=True, name="jarvis-notch-mon").start()
+
+    # Enter-to-talk fallback: wake word misses shouldn't block the whole loop
+    if config.wakeword.enabled and not no_wake:
+        def _enter_trigger() -> None:
+            while True:
+                try:
+                    input()
+                except EOFError:
+                    return
+                io._manual_trigger.set()
+
+        threading.Thread(target=_enter_trigger, daemon=True, name="jarvis-enter").start()
     brain.speaker = io.speaker
     brain.should_abort = lambda: io._check_barge_in()
     brain.ctx.confirm_fn = io.confirm_voice
@@ -207,18 +256,28 @@ def run_voice(config, no_wake: bool, no_tts: bool) -> None:
     brain.on_tool = lambda n, a: console.print(f"\n[bold cyan]⚙ {n}[/] {a}")
     brain.on_tool_result = lambda n, r: console.print(f"\n[dim]  ↳ {r[:200]}[/]")
 
-    mode = "say 'Hey Jarvis'" if (config.wakeword.enabled and not no_wake) else "press Enter, then speak"
-    console.print(f"[bold green]JARVIS online.[/] {mode} — Ctrl+C to quit.")
+    mode = "say 'Hey Jarvis' (or press Enter)" if (config.wakeword.enabled and not no_wake) else "press Enter, then speak"
+    resolved_mic = io.mic.input_device
+    console.print(
+        f"[bold green]JARVIS online.[/] {mode} — Ctrl+C to quit.\n"
+        f"[dim]mic={resolved_mic!r} @ {io.mic._native_rate}Hz ({io.mic._channels}ch, "
+        f"threshold={config.wakeword.threshold})[/]"
+    )
     try:
         while True:
+            io.phase = "idle"
             if config.wakeword.enabled and not no_wake:
                 io.listen_for_wake()
             else:
                 input()
+            io.phase = "awake"
             _blip(io.speaker)
+            io.speaker.wait_done()
+            io.phase = "listening"
             pcm = io.capture_utterance()
             if len(pcm) < 16000 * 0.25:
                 continue
+            io.phase = "thinking"
             t0 = time.monotonic()
             text = io.transcribe(pcm)
             console.print(f"\n[bold yellow]You:[/] {text}")
@@ -231,9 +290,8 @@ def run_voice(config, no_wake: bool, no_tts: bool) -> None:
                 console.print(f"\n[bold red]error:[/] {e}")
                 io.speaker.flush()
                 continue
-            if no_tts:
-                pass
             io.speaker.wait_done()
+            io.phase = "idle"
             console.print()  # newline after streamed deltas
             _print_metrics(brain.metrics)
             brain.metrics = {}
