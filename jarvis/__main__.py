@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import sys
+import threading
 import time
 
 import numpy as np
@@ -371,6 +372,9 @@ def main() -> None:
             run_voice(config, args.no_wake, args.no_tts)
         except Exception as e:
             print(f"[jarvis] voice mode failed: {e}", file=sys.stderr)
+            import traceback
+
+            traceback.print_exc()
             print("Falling back to text mode. Fix audio/mic issues, or use --text.", file=sys.stderr)
             run_text(config, args.no_tts)
 
