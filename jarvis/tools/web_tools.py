@@ -26,6 +26,47 @@ def register_web_tools(reg: ToolRegistry) -> None:
         ["location"],
     )(_weather)
 
+    reg.tool(
+        "search_wikipedia",
+        "Look up a topic on Wikipedia and return a concise factual summary — people, places, events, science, history, companies.",
+        {"topic": {"type": "string", "description": "Topic or article title"}},
+        ["topic"],
+    )(_wikipedia)
+
+
+def _wikipedia(topic: str) -> ToolResult:
+    from urllib.parse import quote
+
+    r = requests.get(
+        f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(topic)}",
+        headers=_UA, timeout=10,
+    )
+    if r.status_code == 200:
+        data = r.json()
+        extract = (data.get("extract") or "").strip()
+        if extract:
+            return ToolResult("done", f"Wikipedia — {data.get('title', topic)}: {extract[:1500]}")
+    # title guess failed → use the search API to find the right article
+    s = requests.get(
+        "https://en.wikipedia.org/w/api.php",
+        params={"action": "query", "list": "search", "srsearch": topic,
+                "format": "json", "srlimit": 1},
+        headers=_UA, timeout=10,
+    ).json()
+    hits = s.get("query", {}).get("search", [])
+    if not hits:
+        return ToolResult("failed", f"nothing on Wikipedia for '{topic}'")
+    r = requests.get(
+        f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(hits[0]['title'])}",
+        headers=_UA, timeout=10,
+    )
+    if r.status_code == 200:
+        data = r.json()
+        extract = (data.get("extract") or "").strip()
+        if extract:
+            return ToolResult("done", f"Wikipedia — {data.get('title', topic)}: {extract[:1500]}")
+    return ToolResult("failed", f"no summary available for '{topic}'")
+
 
 def _web_search(query: str) -> ToolResult:
     try:

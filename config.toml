@@ -9,7 +9,7 @@ refractory_secs = 2.5        # ignore detections for N secs after a hit
 
 [vad]
 start_speech_secs = 0.15     # speech energy needed to start capturing
-end_silence_secs = 0.45      # silence that ends an utterance (endpointing)
+end_silence_secs = 0.35      # silence that ends an utterance (endpointing)
 min_utterance_secs = 0.3
 max_utterance_secs = 12.0    # hard cap; noisy rooms otherwise hold the mic open
 barge_in_secs = 0.35         # sustained speech that interrupts playback
@@ -26,9 +26,10 @@ local_compute = "int8"
 provider = "groq"
 model = "openai/gpt-oss-120b"
 vision_model = "qwen/qwen3.8-27b"  # screenshot fallback (best-effort)
-temperature = 0.4
+temperature = 0.6
+reasoning = "low"              # gpt-oss dial: low=fastest, medium, high=deepest (deep questions auto-bump to high)
 max_tool_rounds = 5
-history_turns = 12           # conversation turns kept in context
+history_turns = 6            # conversation turns kept in context (shorter = faster)
 
 [tts]
 # provider: "piper" | "kokoro" | "sapi" | "groq" ("auto" = best available)

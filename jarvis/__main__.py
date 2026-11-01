@@ -377,6 +377,11 @@ def main() -> None:
             traceback.print_exc()
             print("Falling back to text mode. Fix audio/mic issues, or use --text.", file=sys.stderr)
             run_text(config, args.no_tts)
+    # audio threads + PortAudio can segfault during interpreter teardown;
+    # devices are already closed by here, so exit hard and clean
+    import os
+
+    os._exit(0)
 
 
 if __name__ == "__main__":

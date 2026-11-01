@@ -10,6 +10,7 @@ from typing import Callable
 from openai import OpenAI
 
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
 class LLMAborted(Exception):
@@ -28,19 +29,25 @@ class ToolCall:
 
 class LLMClient:
     def __init__(self, api_key: str, model: str, base_url: str | None = None,
-                 temperature: float = 0.4):
+                 temperature: float = 0.4, reasoning_effort: str | None = None):
         # placeholder key keeps construction working when unset (tests, text mode);
         # real API calls then fail with a clear auth error
         self.client = OpenAI(api_key=api_key or "missing-key", base_url=base_url or GROQ_BASE_URL)
         self.model = model
         self.temperature = temperature
+        self.reasoning_effort = reasoning_effort
 
     @classmethod
     def from_config(cls, config) -> "LLMClient":
         llm = config.llm
+        effort = getattr(llm, "reasoning", None)
         if llm.provider == "groq":
-            return cls(config.groq_api_key, llm.model, GROQ_BASE_URL, llm.temperature)
-        return cls(config.openai_api_key, llm.model, config.openai_base_url or None, llm.temperature)
+            return cls(config.groq_api_key, llm.model, GROQ_BASE_URL, llm.temperature, effort)
+        if llm.provider == "gemini":
+            # free key from aistudio.google.com — solid fallback when Groq queues
+            model = llm.model if llm.model != "openai/gpt-oss-120b" else "gemini-2.5-flash"
+            return cls(config.gemini_api_key, model, GEMINI_BASE_URL, llm.temperature, None)
+        return cls(config.openai_api_key, llm.model, config.openai_base_url or None, llm.temperature, effort)
 
     def stream_chat(
         self,
@@ -48,6 +55,7 @@ class LLMClient:
         tools: list[dict] | None,
         on_text_delta: Callable[[str], None] | None = None,
         should_abort: Callable[[], bool] | None = None,
+        reasoning_effort: str | None = None,
     ) -> tuple[str, list[dict]]:
         """Stream a chat completion.
 
@@ -58,9 +66,16 @@ class LLMClient:
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
+            # default caps are small; high reasoning effort can exhaust them
+            # on the analysis channel and return an empty reply
+            "max_tokens": 8192,
         }
         if tools:
             kwargs["tools"] = tools
+        # gpt-oss models expose a reasoning dial; low = fastest, high = deepest
+        effort = reasoning_effort or self.reasoning_effort
+        if effort and self.model.startswith("openai/gpt-oss"):
+            kwargs["reasoning_effort"] = effort
 
         content_parts: list[str] = []
         pending: dict[int, ToolCall] = {}

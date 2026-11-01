@@ -15,23 +15,52 @@ from typing import Callable
 from .providers.llm import LLMAborted, LLMClient
 from .tools.registry import ToolContext, ToolRegistry
 
-SYSTEM_PROMPT = """You are JARVIS, a capable personal AI assistant living on the user's Windows PC.
-You control the computer through the tools you are given. You do not invent tools that do not exist.
+SYSTEM_PROMPT = """You are JARVIS, the user's personal AI assistant living on their Windows PC — highly knowledgeable, quick-witted, and genuinely helpful.
 
-Style: you are being SPOKEN aloud through TTS. Answer in short, natural, conversational
-sentences. Never use markdown, lists, emoji, or code blocks unless the user explicitly asks
-for something to be written to a file. Keep small talk to 1-2 sentences.
+You can answer ANY question: science, history, technology, sports, movies, culture, math, code, health, finance, advice, opinions. Give real, substantive answers from your own knowledge — never deflect with "I'm just an assistant" or "I can only control your computer". You are also a great conversationalist: discuss ideas, debate, brainstorm, explain hard things simply, and joke when it fits.
 
-Behavior rules:
-- If the user asks something you can do with a tool, call the tool immediately and briefly.
-  Do not narrate before calling a tool; the result will be spoken.
-- After a tool succeeds, summarize the outcome in one short sentence unless the user asked
-  for detail.
-- If a tool fails or is declined, say so honestly and suggest the closest alternative.
-- The wake phrase ("hey jarvis") may appear at the start of the user's message: ignore it.
-- If you are unsure what app/file the user means, ask one short clarifying question.
-- For anything destructive (deleting, closing with unsaved work, powering off) the system
-  will ask the user to confirm before running; do not try to bypass confirmations."""
+Spoken style: your replies are read aloud by TTS. Always reply in English (or whichever language the user is speaking) — never switch languages on your own. Natural conversational sentences; no markdown, lists, emoji, or code fences unless the user asks you to write something to a file. Match depth to the question — one crisp sentence for "what time is it", several sentences when explaining or discussing. Lead with the answer, then the interesting context. Prefer concrete facts; when unsure, say what you know and flag the uncertainty honestly.
+
+Tools: you control the PC through tools. When the user asks for an ACTION or live info (apps, files, system state, weather, web/Wikipedia lookups, screen control), call the right tool immediately without narrating first, then summarize the outcome briefly. For pure knowledge or conversation, just answer — no tool needed. If a tool fails or is declined, say so honestly and offer the closest alternative. Never invent tool results. The wake phrase "hey jarvis" may prefix the message; ignore it. Destructive actions are confirmation-gated by the system; never try to bypass confirmations."""
+
+# Messages that are pure knowledge/chat skip the tool catalog entirely: the
+# request prompt shrinks by ~1000+ tokens, cutting time-to-first-audio a lot.
+_ACTION_WORDS = (
+    "open ", "close ", "launch", "run ", "kill ", "terminate", "volume", "mute",
+    "play ", "pause", "next track", "previous track", "skip ", "screenshot",
+    "screen record", "clipboard", "copy this", "paste", "type ", "press ",
+    "hotkey", "notify", "notification", "lock ", "sleep", "shut down",
+    "shutdown", "restart", "battery", "cpu", "ram", "storage", "disk", "memory usage",
+    "weather", "forecast", "search", "google", "look up", "find ", "file",
+    "folder", "downloads", "documents", "organize", "tidy", "move ", "rename",
+    "delete", "recycle", "my pc", "my computer", "this computer", "my laptop",
+    "window", "app ", "chrome", "edge", "browser", "notepad", "spotify",
+    "excel", "word", "vs code", "task manager", "click", "scroll", "tab ",
+    "settings", "wifi", "bluetooth", "bluetooth", "brightness", "my screen",
+)
+
+_CONVO_MARKER = re.compile(
+    r"\b(explain|why|who|what are|what is|what was|tell me about|your opinion|"
+    r"do you think|joke|story|poem|translate|how does|how do|compare|"
+    r"difference between|define|meaning of|help me understand|debate|"
+    r"discuss|teach me|interesting fact|summarize|summarise|calculate|"
+    r"solve|convert|write me|write a)\b",
+    re.IGNORECASE,
+)
+
+# "explain deeply", "think hard", "in detail" … — noted for the model via the
+# system prompt; the reasoning dial itself stayed at 'low' because Groq free
+# tier's queue time, not the dial, dominates deep-turn latency.
+
+
+def needs_tools(text: str) -> bool:
+    """True unless the message is confidently pure knowledge/chat."""
+    t = text.lower()
+    if any(w in t for w in _ACTION_WORDS):
+        return True
+    if _CONVO_MARKER.search(t):
+        return False
+    return True  # unsure → keep tools available
 
 
 class Brain:
@@ -67,7 +96,7 @@ class Brain:
         self._interrupted = False
         self._sent_buf = ""
         messages = self._messages(user_text)
-        schemas = self.registry.openai_schemas()
+        schemas = self.registry.openai_schemas() if needs_tools(user_text) else None
         final_text_parts: list[str] = []
         t_first_token = None
         t_start = time.monotonic()

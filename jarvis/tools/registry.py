@@ -77,19 +77,23 @@ class ToolRegistry:
         return list(self._tools)
 
     def openai_schemas(self) -> list[dict]:
-        """Tools in OpenAI/Groq function-calling schema format."""
+        """Tools in OpenAI/Groq function-calling schema format.
+
+        Compact on purpose: descriptions are clipped and parameter
+        descriptions dropped — the schema rides along on EVERY tool-path
+        request, so its size is time-to-first-audio.
+        """
         out = []
         for t in self._tools.values():
+            props = {}
+            for k, v in t.params.items():
+                props[k] = {"type": v.get("type", "string"), **({"enum": v["enum"]} if "enum" in v else {})}
             out.append({
                 "type": "function",
                 "function": {
                     "name": t.name,
-                    "description": t.description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": t.params,
-                        "required": t.required,
-                    },
+                    "description": t.description[:110],
+                    "parameters": {"type": "object", "properties": props, "required": t.required},
                 },
             })
         return out

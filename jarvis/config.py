@@ -61,6 +61,7 @@ class Config:
         self.general = c.general
 
         self.groq_api_key = os.environ.get("GROQ_API_KEY", "").strip()
+        self.gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
         self.openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
         self.openai_base_url = os.environ.get("OPENAI_BASE_URL", "").strip()
 
@@ -73,11 +74,15 @@ class Config:
     def has_cloud_key(self) -> bool:
         if self.llm.provider == "groq":
             return bool(self.groq_api_key)
+        if self.llm.provider == "gemini":
+            return bool(self.gemini_api_key)
         return bool(self.openai_api_key)
 
     def api_key(self) -> str:
         if self.llm.provider == "groq":
             return self.groq_api_key
+        if self.llm.provider == "gemini":
+            return self.gemini_api_key
         return self.openai_api_key
 
 

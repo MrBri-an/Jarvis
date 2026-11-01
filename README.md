@@ -37,16 +37,33 @@ the wake word never blocks you. A **status notch** at the top of the screen show
 idle / listening / thinking / speaking. Interrupt JARVIS by clicking the mouse,
 pressing Esc, or just talking over it.
 
-## What it can do (24 tools)
+## What it can do
+
+**Ask it anything** — it's a full LLM conversationalist: science, history,
+movies, sports, advice, math, opinions, debates, explanations. Pure questions
+skip the tool layer entirely for the fastest possible reply.
+
+**And control the PC (31 tools)**:
 
 - **System**: open/close apps, volume, media keys, screenshots, clipboard,
   hotkeys, typing into focused windows, toast notifications, lock/sleep,
   battery/CPU/RAM/disk/time.
-- **Web**: DuckDuckGo search, weather (Open-Meteo), open URLs.
+- **Knowledge lookups**: Wikipedia summaries, DuckDuckGo search, weather
+  (Open-Meteo), open URLs.
 - **Files**: find/read/write, organize-folder-by-type, move/rename, recycle-bin
   delete, folder stats, and guarded PowerShell for bulk jobs.
 - All destructive actions ask **"yes or no?"** out loud first; file writes,
   moves, and folder-organizing are undoable (`"undo that"`).
+
+## Speed design
+
+- Pure-chat messages bypass the 31-tool catalog (≈6x smaller prompt) → the
+  reply starts streaming in ~1-2 s when Groq is healthy.
+- Tool schemas are compacted; only the action-relevant turns pay for them.
+- TTS starts on the first completed sentence while the LLM is still writing.
+- Groq's free tier sometimes queues (evenings): replies can stall. For a
+  consistently fast brain, get a free Gemini key (aistudio.google.com/apikey),
+  put it in `.env`, and set `provider = "gemini"` under `[llm]` — one line.
 
 ## Safety model
 
